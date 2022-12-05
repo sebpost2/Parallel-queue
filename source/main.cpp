@@ -5,20 +5,33 @@
 #include <queue>
 #include <sstream>
 #include <thread>
+#include <condition_variable>
+
 
 template <typename T>
 class ConcurrentQueue {
  public:
-  void push(const T &data) { queue_.push(data); }
+  void push(const T &data) { 
+      std::lock_guard<std::mutex> lock(queue_mutex_);
+      queue_.push(data); 
+      cv.notify_one();
+  }
 
   T pop() {
-    T result = queue_.front();
-    return result;
+      std::unique_lock<std::mutex> lock(queue_mutex_);
+      while (queue_.empty())
+      {
+          cv.wait(lock);
+      }
+      T result = queue_.front();
+      queue_.pop();
+      return result;
   }
 
  private:
   std::queue<T> queue_;
   std::mutex queue_mutex_;
+  std::condition_variable cv;
 };
 
 class Producer {
@@ -84,7 +97,14 @@ int main(int argc, char *argv[]) {
 
   int stop;
   std::cin >> stop;
-  // join
+
+  for (unsigned int i = 0; i < number_producers; ++i) {
+      producers[i]->join();
+  }
+
+  for (unsigned int i = 0; i < number_consumers; ++i) {
+      consumers[i]->join();
+  }
 
   return 0;
 }
